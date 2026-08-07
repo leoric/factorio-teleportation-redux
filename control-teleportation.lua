@@ -591,7 +591,11 @@ function Teleportation_RememberBeacon(entity)
   -- Entity isn't valid despite just being built. Shouldn't happen but JIC.
   if not entity.valid then return end
   Teleportation_InitializeGeneralGlobals()
-  entity.operable = false
+  -- Operable so that left-clicking the beacon fires on_gui_opened (handled below), which we intercept
+  -- to show our own teleportation window instead of the default 10-slot container GUI. That inventory
+  -- is only ever used internally by Telelogistics to shuttle items from linked Teleproviders - it's
+  -- not meant to be opened directly by the player.
+  entity.operable = true
   entity.disabled_by_script = true
   local beacon = {}
   beacon.key = Common_CreateEntityKey(entity)
@@ -1221,6 +1225,18 @@ script.on_event(defines.events.on_gui_closed, function(event)
   end
 end)
 
+--When the player clicks a teleportation beacon placed on the terrain, open our teleportation window
+--instead of letting the game open the beacon's default container GUI (that 10-slot inventory is only
+--used internally by Telelogistics and was never meant to be seen/edited directly by the player).
+script.on_event(defines.events.on_gui_opened, function(event)
+  if event.gui_type == defines.gui_type.entity and event.entity and event.entity.valid and event.entity.name == "teleportation-beacon" then
+    local player = game.players[event.player_index]
+    if not Common_IsPlayerOk(player) then return end
+    player.opened = nil -- Close the default container GUI before the player ever sees it.
+    Teleportation_ShowMainWindow(player)
+  end
+end)
+
 --Periodically refreshes the energy bar/label of every visible row, without rebuilding the whole list (cheaper than a full redraw).
 function Teleportation_EnergyProgressUpdate()
   for i, player in pairs(game.players) do
@@ -1294,7 +1310,7 @@ function Teleportation_Migrate()
   if script.active_mods["Teleportation_Redux"] then
     -- Recollect all beacons
     log("Recollecting beacons...")
-    Teleportation_RefreshBeaconsAndMakeTheirEntitiesUnoperable()
+    Teleportation_RefreshBeaconsAndSetOperable()
     if storage.Teleportation and storage.Teleportation.beacons and #storage.Teleportation.beacons > 0 then
       local basebuffer = settings.startup["Teleportation-beacon-storage"].value * 1000000
       for i = #storage.Teleportation.beacons, 1, -1 do
@@ -1340,13 +1356,14 @@ function Teleportation_Migrate()
   end
 end
 
-function Teleportation_RefreshBeaconsAndMakeTheirEntitiesUnoperable()
+--Also re-applies operable=true so old saves (from before beacons were clickable) pick up the click-to-open behavior.
+function Teleportation_RefreshBeaconsAndSetOperable()
   for i, surface in pairs(game.surfaces) do
     -- Find all beacons on all surfaces
     local beacons_entities_on_surface = surface.find_entities_filtered({name="teleportation-beacon"})
     for bi, beacon_entity in pairs(beacons_entities_on_surface) do
       --table.insert(beacons_entities, beacon_entity)
-      beacon_entity.operable = false
+      beacon_entity.operable = true
       beacon_entity.disabled_by_script = true
       local beacon_key = Common_CreateEntityKey(beacon_entity)
       local beacon_from_list = Common_GetBeaconByKey(beacon_key)

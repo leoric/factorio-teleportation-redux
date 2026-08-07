@@ -1,4 +1,8 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.1.2
+  Features:
+    - clicking a beacon opens up the teleporter GUI
+---------------------------------------------------------------------------------------------------
 Version: 2.1.1
   Bugfixes:
     - Fixed error when mod configuration changes due to attempt to set .active.
